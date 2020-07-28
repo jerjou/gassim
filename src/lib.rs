@@ -108,6 +108,7 @@ impl World {
     }
 
     pub fn add_particle(&mut self, x: f32, y: f32, radius: f32, mass: f32, heat: f32) {
+        log!("Adding particle to {}, {}", x, y);
         let rigid_body = RigidBodyDesc::new()
             .position(Isometry2::new(Vector2::new(x, y), 0.))
             .gravity_enabled(true)

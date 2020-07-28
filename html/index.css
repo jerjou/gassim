@@ -6,7 +6,7 @@
   --border: 1px solid var(--grey);
   --hover-button: linear-gradient(0deg, var(--light-grey), white);
   --selected-button: linear-gradient(0deg, var(--light-green), white);
-  --cursor-circle: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" style="font-size: 32px"><text x="-2" y="21">◌</text></svg>'),auto;
+  --cursor-circle: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" style="font-size: 32px;"><text style="fill:blue" x="-2" y="21">◌</text></svg>'),auto;
 }
 
 /* Global stuff */

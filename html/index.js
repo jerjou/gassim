@@ -7,19 +7,17 @@ const $el = (t, p) => {
   return el;
 };
 
-// Returns a function that invokes the callback with coords relative to the canvas
-function coord(cb) {
-  return (e) => {
-    const canvas = e.target;
-    const rect = canvas.getBoundingClientRect()
-    const top = e.clientY - rect.top
-    const left = e.clientX - rect.left
-    return cb(top, left);
-  };
+// Returns coordinates relative to the canvas
+function coord(e) {
+  const canvas = e.target;
+  const rect = canvas.getBoundingClientRect();
+  const y = rect.height - (e.clientY - rect.top);
+  const left = e.clientX - rect.left;
+  return [left, y];
 }
 
 let control = {
-  init: (wasm, numPoints, width, height, radius) => {
+  init: (wasm, canvas, numPoints, width, height, radius) => {
     control.world = World.new(numPoints, width, height, radius, 1, 1000);
 
     let play = $('#play');
@@ -30,8 +28,57 @@ let control = {
     });
     Object.assign(control, {
       playEl: play,
-      ctx: $('canvas').getContext('2d'),
+      ctx: canvas.getContext('2d'),
       wasm: wasm,
+    });
+
+    control.initMouse(canvas);
+  },
+  _continuouslyDo: f => {
+    let iter = 0;
+    function doF(e) {
+      let r = f(iter++, ...control.mouseCoord);
+      iter++;
+      if (control.mousedown) {
+        requestAnimationFrame(doF);
+      }
+      return r;
+    }
+    doF();
+  },
+  initMouse: (canvas) => {
+    canvas.addEventListener('mousedown', (e) => {
+      console.log(e);
+      e.preventDefault();
+      control.mousedown = true;
+      if ($('#addTab').checked) {
+        let form = $('form.tab.add');
+        let rate = parseInt(form.rate.value, 10);
+        let radius = parseInt(form.radius.value, 10);
+        let mass = parseInt(form.mass.value, 10);
+        let heat = parseInt(form.heat.value, 10);
+
+        control._continuouslyDo((iter, x, y) => {
+          if (iter % rate === 0) {
+            control.world.add_particle(x, y, radius, mass, heat);
+            // Update the world so we can see the new particle
+            if (!control.playEl.checked) {
+              control.renderLoop();
+            }
+          }
+        });
+
+      } else if ($('#heatTab').checked) {
+        control.addHeatLoop();
+      }
+    });
+    window.addEventListener('mouseup', (e) => {
+      console.log(e);
+      e.preventDefault();
+      control.mousedown = false;
+    });
+    canvas.addEventListener('mousemove', (e) => {
+      control.mouseCoord = coord(e);
     });
   },
   renderLoop: () => {
@@ -61,7 +108,7 @@ let control = {
     if (control.playEl.checked) {
       requestAnimationFrame(control.renderLoop);
     }
-  }
+  },
 };
 
 async function run(width, height, numPoints=30, radius=10) {
@@ -72,7 +119,7 @@ async function run(width, height, numPoints=30, radius=10) {
   canvas.style.width = `${canvas.width = width}px`;
   canvas.style.height = `${canvas.height = height}px`;
 
-  control.init(wasm, numPoints, width, height, radius);
+  control.init(wasm, canvas, numPoints, width, height, radius);
   control.renderLoop();
 }
 
