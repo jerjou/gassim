@@ -1,0 +1,125 @@
+:root {
+  --light-grey: rgba(0,0,0,.1);
+  --grey: rgba(0,0,0,.5);
+  --dark-grey: rgba(0,0,0,.9);
+  --light-green: rgba(128,255,128,.4);
+  --border: 1px solid var(--grey);
+  --hover-button: linear-gradient(0deg, var(--light-grey), white);
+  --selected-button: linear-gradient(0deg, var(--light-green), white);
+  --cursor-circle: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" style="font-size: 32px"><text x="-2" y="21">◌</text></svg>'),auto;
+}
+
+/* Global stuff */
+input[type=checkbox], input[type=radio] {
+  display: none;
+}
+
+/* layout */
+body {
+  display: flex;
+  flex-direction: row;
+}
+
+canvas {
+  outline: var(--border);
+}
+.controls {
+  position: relative;
+  box-sizing: border-box;
+  flex-grow: 1;
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tab controls */
+.tab-bar {
+  border-bottom: var(--border);
+}
+.tab-bar>label {
+  font-size: 2rem;
+  border: var(--border);
+  margin-bottom: -1px;
+  cursor: pointer;
+  padding: 0 .7rem;
+}
+.tab-bar>label:hover {
+  background: var(--hover-button);
+}
+.tab {
+  border:var(--border);
+  border-top: 0px;
+  flex-grow: 1;
+  display: none;
+  flex-direction: column;
+  padding: 1rem;
+}
+input#addTab:checked ~ .controls>.tab-bar>label[for=addTab],
+input#heatTab:checked ~ .controls>.tab-bar>label[for=heatTab]
+{
+  border-bottom: 1px solid white;
+}
+input#addTab:checked ~ .controls>.tab.add,
+input#heatTab:checked ~ .controls>.tab.heat
+{
+  display: flex;
+}
+
+#addTab:checked ~ canvas {
+  cursor: var(--cursor-circle);
+}
+
+/* within a tab */
+.tab>label {
+  display: grid;
+  grid-template-columns: 50% 50%;
+  margin-bottom: .3rem;
+}
+.tab>label>input {
+  width: 4rem;
+}
+
+.tab.add>.mode {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-evenly;
+}
+.tab.add>.mode label {
+  border: var(--border);
+  cursor: pointer;
+  padding: .2rem 1rem;
+}
+.tab.add>.mode label:hover {
+  background: var(--hover-button);
+}
+.tab.add>.mode input[type=radio]:checked + label {
+  background: var(--selected-button);
+}
+
+/* The play/pause button */
+#play + label {
+  position: absolute;
+  bottom:0;
+  right:100%;
+  width: 50px;
+  height: 50px;
+  border: var(--border);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-size: 2rem;
+  background-color: white;
+}
+#play + label::before {
+  content: '▶';
+  text-align: center;
+  position: relative;
+  top: -.2rem;
+  right: -.2rem;
+}
+#play:checked + label::before {
+  content: '⏸';
+  top: 0;
+  right: 0;
+}

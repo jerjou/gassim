@@ -10,6 +10,7 @@ use nphysics2d::object::{
 };
 use nphysics2d::world::{DefaultGeometricalWorld, DefaultMechanicalWorld};
 use rand::prelude::*;
+use rand;
 use std::f32::consts::PI;
 use wasm_bindgen::prelude::*;
 
@@ -26,6 +27,12 @@ extern "C" {
     fn log(s: &str);
 }
 
+macro_rules! log {
+    ( $( $x:expr ),* ) => {
+        log(&format!($($x,)*));
+    };
+}
+
 #[wasm_bindgen]
 pub struct World {
     mech: DefaultMechanicalWorld<f32>,
@@ -35,11 +42,15 @@ pub struct World {
     joint_constraints: DefaultJointConstraintSet<f32>,
     force_generators: DefaultForceGeneratorSet<f32>,
     positions: Vec<(f32, f32)>,
+    width: f32,
+    height: f32,
+    pub num_particles: usize,
+    rng: rand::rngs::ThreadRng,
 }
 
 #[wasm_bindgen]
 impl World {
-    pub fn new(num_particles: usize, width: f32, height: f32, radius: f32, heat: f32) -> Self {
+    pub fn new(num_particles: usize, width: f32, height: f32, radius: f32, mass: f32, heat: f32) -> Self {
         console_error_panic_hook::set_once();
         let mechanical_world = DefaultMechanicalWorld::new(Vector2::new(0.0, -98.1));
         let geometrical_world = DefaultGeometricalWorld::new();
@@ -50,15 +61,15 @@ impl World {
         let force_generators = DefaultForceGeneratorSet::new();
 
         // Create box boundaries
-        const WALL_WIDTH:f32 = 100.;
+        const WALL_WIDTH:f32 = 100.;  // Thick wall width to ensure it's impenetrable
         let walls = [
             // x, y, width, height
-            (0.0f32, 0., 1.2 * width, WALL_WIDTH), // bottom
-            (0.0f32, 0., WALL_WIDTH, 1.2 * height), // left
-            (width, 0., WALL_WIDTH, 1.2 * height), // right
-            (0.0f32, height, width, WALL_WIDTH), // top
+            (0.0f32, -WALL_WIDTH, 1.2 * width, WALL_WIDTH), // bottom
+            (-WALL_WIDTH, 0., WALL_WIDTH, 1.2 * height), // left
+            (width + WALL_WIDTH, 0., WALL_WIDTH, 1.2 * height), // right
+            (0.0f32, height + WALL_WIDTH, width, WALL_WIDTH), // top
         ];
-        let ground = Compound::new(walls.into_iter().copied().map(|(x, y, w, h)| {
+        let ground = Compound::new(walls.iter().copied().map(|(x, y, w, h)| {
             let delta = Isometry2::new(Vector2::new(x, y), 0.);
             let shape = ShapeHandle::new(Cuboid::new(Vector2::new(w, h)));
             (delta, shape)
@@ -72,89 +83,53 @@ impl World {
                 .build(BodyPartHandle(ground_handle, 0)),
         );
 
-
-        let mut rng = rand::thread_rng();
-        (0..num_particles).for_each(|_i| {
-            let rigid_body = RigidBodyDesc::new()
-                // The rigid body translation.
-                // Default: zero vector.
-                //.translation(Vector2::y() * (i * height / num_particles) as f32
-                //    + Vector2::x() * (i * width / num_particles) as f32)
-                // The rigid body rotation.
-                // Default: no rotation.
-                //.rotation(5.0)
-                // The rigid body position. Will override `.translation(...)` and `.rotation(...)`.
-                // Default: the identity isometry.
-                .position(Isometry2::new(
-                    Vector2::new(
-                        width * rng.gen::<f32>(),
-                        height * rng.gen::<f32>(),
-                    ),
-                    0.,
-                ))
-                // Whether or not this rigid body is affected by gravity.
-                // Default: true
-                .gravity_enabled(true)
-                // The velocity of this body.
-                // Default: zero velocity.
-                .velocity(Velocity::linear(
-                    heat * rng.gen::<f32>() - heat / 2.,
-                    heat * rng.gen::<f32>() - heat / 2.,
-                ))
-                // The linear damping applied to this rigid body velocity to slow it down automatically.
-                // Default: zero (no damping at all).
-                //.linear_damping(10.0)
-                // The angular damping applied to this rigid body velocity to slow down its rotation automatically.
-                // Default: zero (no damping at all).
-                //.angular_damping(5.0)
-                // The maximum linear velocity this rigid body can reach.
-                // Default: f32::max_value() or f64::max_value() (no limit).
-                //.max_linear_velocity(10.0)
-                // The maximum angular velocity this rigid body can reach.
-                // Default: f32::max_value() or f64::max_value() (no limit).
-                //.max_angular_velocity(1.7)
-                // The angular inertia tensor of this rigid body, expressed on its local-space.
-                // Default: the zero matrix.
-                //.angular_inertia(3.0)
-                // The rigid body mass.
-                // Default: 0.0
-                .mass(1.2)
-                // The threshold for putting this rigid body to sleep.
-                // Default: Some(ActivationStatus::default_threshold())
-                .sleep_threshold(None)
-                // All done, actually build the rigid-body.
-                .build();
-            let handle = bodies.insert(rigid_body);
-
-            let shape = ShapeHandle::new(Ball::new(10.));
-            let collider = ColliderDesc::new(shape)
-                // The material of this collider.
-                // Default: BasicMaterial::default()
-                // with restitution: 0.0, friction: 0.5, combine mode: Average.
-                .material(MaterialHandle::new(BasicMaterial::new(1.0, 0.0)))
-                .margin(radius / 2.)
-                // Whether this collider is a sensor, i.e., generate only proximity events.
-                // Default: false
-                //.sensor(true)
-                // Arbitrary user-defined data associated to the rigid body to be built.
-                // Default: no associated data
-                //.user_data(10)
-                // All done, actually build the collider into the `world`.
-                .build(BodyPartHandle(handle, 0));
-            colliders.insert(collider);
-        });
-
-        World {
+        // Seed it with particles
+        let rng = rand::thread_rng();
+        let mut world = World {
             mech: mechanical_world,
             geo: geometrical_world,
             bodies,
             colliders,
             joint_constraints,
             force_generators,
+            width, height,
+            rng,
+            num_particles: 0,
             positions: vec![],
-        }
+        };
+        let mut rng = rand::thread_rng();
+        (0..num_particles).for_each(|_i| {
+            world.add_particle(
+                width * rng.gen::<f32>(),
+                height * rng.gen::<f32>(),
+                radius, mass, heat);
+        });
+        world
     }
-    pub fn step(&mut self) {
+
+    pub fn add_particle(&mut self, x: f32, y: f32, radius: f32, mass: f32, heat: f32) {
+        let rigid_body = RigidBodyDesc::new()
+            .position(Isometry2::new(Vector2::new(x, y), 0.))
+            .gravity_enabled(true)
+            .velocity(Velocity::linear(
+                    heat * self.rng.gen::<f32>() - heat / 2.,
+                    heat * self.rng.gen::<f32>() - heat / 2.,
+            ))
+            .mass(mass)
+            .sleep_threshold(None)
+            .build();
+        let handle = self.bodies.insert(rigid_body);
+
+        self.colliders.insert(ColliderDesc::new(ShapeHandle::new(Ball::new(radius)))
+            // restitution, friction: 0.5
+            .material(MaterialHandle::new(BasicMaterial::new(1.0, 0.0)))
+            .margin(0.5)
+            .build(BodyPartHandle(handle, 0)));
+
+        self.num_particles += 1;
+    }
+
+    pub fn step(&mut self) -> *const (f32, f32) {
         // Run the simulation.
         self.mech.step(
             &mut self.geo,
@@ -173,9 +148,19 @@ impl World {
                 (pos.x, pos.y)
             })
             .collect();
-    }
-    pub fn position(&self) -> *const (f32, f32) {
         self.positions.as_ptr()
+    }
+
+    pub fn temperature(&mut self, factor: f32) {
+        self
+            .bodies
+            .iter_mut()
+            .filter(|(_, body)| !body.is_ground())
+            .for_each(|(_, body)| {
+                body.generalized_velocity_mut().row_iter_mut().for_each(|mut v| {
+                    v.x = v.x * factor;
+                });
+            });
     }
 }
 

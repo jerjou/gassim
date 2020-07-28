@@ -1,0 +1,41 @@
+<html>
+  <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+    <link href="index.css" rel="stylesheet">
+    <script type="module" src="index.js"></script>
+  </head>
+  <body>
+    <input type=radio name=tab id=addTab checked />
+    <input type=radio name=tab id=heatTab />
+    <canvas></canvas>
+
+    <div class=controls>
+      <div class=tab-bar>
+        <label for=addTab >±○</label>
+        <label for=heatTab >±🔥</label>
+      </div>
+
+      <div class='tab add'>
+        <label>Rate: <input name=rate value=5 /></label>
+        <label>Radius: <input name=radius value=10 /></label>
+        <label>Mass: <input name=mass value=1 /></label>
+        <label>Heat: <input name=heat value=1000 /></label>
+        <div class=mode>
+          <input type=radio name=modifyParticles id=addParticles selected />
+          <label for=addParticles>+</label>
+          <input type=radio name=modifyParticles id=subtractParticles />
+          <label for=subtractParticles>−</label>
+        </div>
+      </div>
+
+      <div class='tab heat'>
+        <label>Rate: <input name=rate value=1.1 /></label>
+        <label>Radius: <input name=radius value=50 /></label>
+      </div>
+
+      <input type=checkbox id=play checked /><label for=play></label>
+    </div>
+  </body>
+</html>
+
+
