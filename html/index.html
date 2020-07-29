@@ -18,16 +18,20 @@
       </div>
 
       <form class='tab setup'>
+        <label>Width: <input type=number name=width min=100 value=800 /></label>
+        <label>Height: <input type=number name=height min=100 value=600 /></label>
         <label># particles: <input type=number name=n min=1 value=30 /></label>
         <label>Radius: <input type=number name=radius min=1 value=10 /></label>
         <label>Mass: <input type=number name=mass min=1 value=1 /></label>
         <label>Heat: <input type=number name=heat min=1 value=1000 /></label>
         <label>Gravity: <input type=number name=gravity max=-1 step=.1 value=-9.8 /></label>
         <button>Reload</button>
+        <label>Timestep: <input type=number name=timestep min=1 max=200 step=1 /></label>
         <div class="spacer"></div>
         <div class=descr>
           <b>Initial world settings</b><br/>
-          These are the parameters used to initially set up the particles.
+          These are the parameters used to initially set up the particles.<br/>
+          <b>Timestep</b> can be changed dynamically to speed up or slow down the simulation.
         </div>
       </form>
 

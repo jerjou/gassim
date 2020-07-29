@@ -98,7 +98,7 @@ input#heatTab:checked ~ .controls>.tab.heat
 
 /* The setup tab */
 .tab.setup>button {
-  margin: 1rem auto 0;
+  margin: 1rem auto;
 }
 
 /* The Add tab */
@@ -144,6 +144,9 @@ input#heatTab:checked ~ .controls>.tab.heat
   justify-content: center;
   font-size: 2rem;
   background-color: white;
+}
+#play + label:hover {
+  background: var(--hover-button);
 }
 #play + label::before {
   content: '▶';

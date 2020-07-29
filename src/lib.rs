@@ -41,8 +41,6 @@ pub struct World {
     joint_constraints: DefaultJointConstraintSet<f32>,
     force_generators: DefaultForceGeneratorSet<f32>,
     positions: Vec<(f32, f32, f32)>,
-    width: f32,
-    height: f32,
     pub num_particles: usize,
     rng: rand::rngs::ThreadRng,
 }
@@ -105,8 +103,6 @@ impl World {
             colliders,
             joint_constraints,
             force_generators,
-            width,
-            height,
             rng,
             num_particles: 0,
             positions: vec![],
@@ -191,7 +187,6 @@ impl World {
             &mut self.joint_constraints,
             &mut self.force_generators,
         );
-
         self.positions = self
             .bodies
             .iter()
@@ -225,6 +220,13 @@ impl World {
                         v.x = v.x * factor;
                     });
             });
+    }
+
+    pub fn timestep(&self) -> f32 {
+        self.mech.timestep()
+    }
+    pub fn set_timestep(&mut self, timestep: f32) {
+        self.mech.set_timestep(timestep);
     }
 }
 

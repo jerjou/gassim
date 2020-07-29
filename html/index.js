@@ -18,7 +18,7 @@ function coord(e) {
 }
 
 let control = {
-  init: (wasm, canvas, width, height) => {
+  init: (wasm, canvas) => {
     let play = $('#play');
     play.addEventListener('change', (e) => {
       if (play.checked) {
@@ -35,24 +35,41 @@ let control = {
     control.initHeat(canvas);
     control.initParticles(canvas);
     control.initNumberScroll();
-    control.initWorld(width, height);
+    control.initWorld(canvas);
   },
 
-  initWorld: (width, height) => {
+  initWorld: canvas => {
+    const TIMESTEP_FACTOR = 2000;
     let form = $('form.tab.setup');
     let resetWorld = _ => {
+      let width = pint(form.width.value);
+      let height = pint(form.height.value);
       let numPoints = pint(form.n.value);
       let radius = pint(form.radius.value);
       let mass = pfloat(form.mass.value);
       let heat = pint(form.heat.value);
       let gravity = pfloat(form.gravity.value) * 100;
+
+      canvas.style.width = `${canvas.width = width}px`;
+      canvas.style.height = `${canvas.height = height}px`;
+
       control.world = World.new(width, height, gravity, numPoints, radius, mass, heat);
+      form.timestep.value = Math.round(control.world.timestep() * TIMESTEP_FACTOR);
     };
+
     form.addEventListener('submit', e => {
       e.preventDefault();
       resetWorld();
     });
     resetWorld();
+
+    // Ability to update timestep on the fly
+    form.timestep.addEventListener('change', e => {
+      let timestep = pint(e.target.value)
+      if (timestep > 0)
+        control.world.set_timestep(timestep / TIMESTEP_FACTOR);
+    });
+
     control.renderLoop();
   },
 
@@ -61,6 +78,7 @@ let control = {
     document.body.addEventListener('wheel', (e) => {
       let el = e.target;
       if (!el.matches('input[type=number]')) return;
+      if (el.step === 'any') return;
       let numIters = ~~Math.abs(Math.round(e.deltaY));
       if (e.deltaY < 0) {
         for (let i = 0; i< numIters; i++) el.stepUp();
@@ -72,7 +90,7 @@ let control = {
   // `rate` is in particles/60 frames
   _continuouslyDo: (rate, f, threshold=30, iter=0) => {
     control.mousedown = true;
-    let remainder = 0;
+    let remainder = 1;
     let numParticles = _ => {
       let thistime = (rate / 60) + remainder;
       remainder = thistime % 1;
@@ -120,6 +138,7 @@ let control = {
 
     control._continuouslyDo(30, (x, y) => control.world.temperature(x, y, radius, factor));
   },
+
   initMouse: canvas => {
     window.addEventListener('mouseup', e => control.mousedown = false);
     canvas.addEventListener('mousemove', e => control.mouseCoord = coord(e));
@@ -175,15 +194,13 @@ let control = {
   },
 };
 
-async function run(width, height) {
+async function run() {
   const wasm = await init();
 
   // Configure canvas
   const canvas = $('canvas');
-  canvas.style.width = `${canvas.width = width}px`;
-  canvas.style.height = `${canvas.height = height}px`;
 
-  control.init(wasm, canvas, width, height);
+  control.init(wasm, canvas);
 }
 
-run(800, 600);
+run();
