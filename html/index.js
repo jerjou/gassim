@@ -18,9 +18,7 @@ function coord(e) {
 }
 
 let control = {
-  init: (wasm, canvas, numPoints, width, height, radius) => {
-    control.world = World.new(numPoints, width, height, radius, 1, 1000);
-
+  init: (wasm, canvas, width, height) => {
     let play = $('#play');
     play.addEventListener('change', (e) => {
       if (play.checked) {
@@ -37,6 +35,25 @@ let control = {
     control.initHeat(canvas);
     control.initParticles(canvas);
     control.initNumberScroll();
+    control.initWorld(width, height);
+  },
+
+  initWorld: (width, height) => {
+    let form = $('form.tab.setup');
+    let resetWorld = _ => {
+      let numPoints = pint(form.n.value);
+      let radius = pint(form.radius.value);
+      let mass = pfloat(form.mass.value);
+      let heat = pint(form.heat.value);
+      let gravity = pfloat(form.gravity.value) * 100;
+      control.world = World.new(width, height, gravity, numPoints, radius, mass, heat);
+    };
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      resetWorld();
+    });
+    resetWorld();
+    control.renderLoop();
   },
 
   // Use the scroll wheel to change the number like a dial
@@ -158,7 +175,7 @@ let control = {
   },
 };
 
-async function run(width, height, numPoints=30, radius=10) {
+async function run(width, height) {
   const wasm = await init();
 
   // Configure canvas
@@ -166,8 +183,7 @@ async function run(width, height, numPoints=30, radius=10) {
   canvas.style.width = `${canvas.width = width}px`;
   canvas.style.height = `${canvas.height = height}px`;
 
-  control.init(wasm, canvas, numPoints, width, height, radius);
-  control.renderLoop();
+  control.init(wasm, canvas, width, height);
 }
 
 run(800, 600);

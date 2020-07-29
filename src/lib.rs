@@ -50,15 +50,16 @@ pub struct World {
 #[wasm_bindgen]
 impl World {
     pub fn new(
-        num_particles: usize,
         width: f32,
         height: f32,
+        gravity: f32,
+        num_particles: usize,
         radius: f32,
         mass: f32,
         heat: f32,
     ) -> Self {
         console_error_panic_hook::set_once();
-        let mechanical_world = DefaultMechanicalWorld::new(Vector2::new(0.0, -98.1));
+        let mechanical_world = DefaultMechanicalWorld::new(Vector2::new(0.0, gravity));
         let geometrical_world = DefaultGeometricalWorld::new();
 
         let mut bodies = DefaultBodySet::new();

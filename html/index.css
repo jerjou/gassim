@@ -15,15 +15,22 @@
 input[type=checkbox], input[type=radio] {
   display: none;
 }
+form {
+  margin: 0;
+}
+* {
+  box-sizing: border-box;
+}
 
 /* layout */
 body {
   display: flex;
   flex-direction: row;
+  font-family: sans-serif;
 }
 
 canvas {
-  outline: var(--border);
+  border: var(--border);
 }
 .controls {
   position: relative;
@@ -37,6 +44,7 @@ canvas {
 /* Tab controls */
 .tab-bar {
   border-bottom: var(--border);
+  white-space: nowrap;
 }
 .tab-bar>label {
   font-size: 2rem;
@@ -49,18 +57,21 @@ canvas {
   background: var(--hover-button);
 }
 .tab {
+  flex-grow: 1;
   border:var(--border);
   border-top: 0px;
-  flex-grow: 1;
+
   display: none;
   flex-direction: column;
   padding: 1rem;
 }
+input#setupTab:checked ~ .controls>.tab-bar>label[for=setupTab],
 input#addTab:checked ~ .controls>.tab-bar>label[for=addTab],
 input#heatTab:checked ~ .controls>.tab-bar>label[for=heatTab]
 {
   border-bottom: 1px solid white;
 }
+input#setupTab:checked ~ .controls>.tab.setup,
 input#addTab:checked ~ .controls>.tab.add,
 input#heatTab:checked ~ .controls>.tab.heat
 {
@@ -74,7 +85,20 @@ input#heatTab:checked ~ .controls>.tab.heat
   margin-bottom: .3rem;
 }
 .tab>label>input {
-  width: 4rem;
+  width: 5rem;
+}
+.tab>.spacer {
+  flex-grow: 1;
+}
+.tab>.descr {
+  font: italic .9rem sans-serif;
+  border-top: var(--border);
+  padding-top: .5rem;
+}
+
+/* The setup tab */
+.tab.setup>button {
+  margin: 1rem auto 0;
 }
 
 /* The Add tab */

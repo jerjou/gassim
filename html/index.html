@@ -5,15 +5,31 @@
     <script type="module" src="index.js"></script>
   </head>
   <body>
-    <input type=radio name=tab id=addTab checked />
+    <input type=radio name=tab id=setupTab checked />
+    <input type=radio name=tab id=addTab />
     <input type=radio name=tab id=heatTab />
     <canvas></canvas>
 
     <div class=controls>
       <div class=tab-bar>
+        <label for=setupTab >🏠</label>
         <label for=addTab >±○</label>
         <label for=heatTab >±🔥</label>
       </div>
+
+      <form class='tab setup'>
+        <label># particles: <input type=number name=n min=1 value=30 /></label>
+        <label>Radius: <input type=number name=radius min=1 value=10 /></label>
+        <label>Mass: <input type=number name=mass min=1 value=1 /></label>
+        <label>Heat: <input type=number name=heat min=1 value=1000 /></label>
+        <label>Gravity: <input type=number name=gravity max=-1 step=.1 value=-9.8 /></label>
+        <button>Reload</button>
+        <div class="spacer"></div>
+        <div class=descr>
+          <b>Initial world settings</b><br/>
+          These are the parameters used to initially set up the particles.
+        </div>
+      </form>
 
       <form class='tab add'>
         <label>Rate: <input type=number name=rate min=1 value=5 /></label>
@@ -26,11 +42,24 @@
           <input type=radio name=modifyParticles id=subtractParticles value=subtract />
           <label for=subtractParticles>−</label>
         </div>
+        <div class="spacer"></div>
+        <div class=descr>
+          <b>Tool to add / remove particles to the box.</b><br/>
+          Click and drag within the box to add/remove particles.<br/>
+          <b>Rate</b> controls how quickly the particles appear under your cursor.<br/>
+        </div>
       </form>
 
       <form class='tab heat'>
         <label>Factor: <input type=number name=factor min=0 step=.1 value=1.1 /></label>
         <label>Radius: <input type=number name=radius min=1 value=50 /></label>
+        <div class="spacer"></div>
+        <div class=descr>
+          <b>Tool to add / remove heat</b><br/>
+          Click and drag within the box to add or remove energy from particles passing under your
+          cursor.<br/>
+          <b>Factor</b>: if less than 1, reduces heat. If more than 1, increases heat.
+        </div>
       </form>
 
       <input type=checkbox id=play checked /><label for=play></label>
