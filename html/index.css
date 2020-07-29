@@ -6,7 +6,9 @@
   --border: 1px solid var(--grey);
   --hover-button: linear-gradient(0deg, var(--light-grey), white);
   --selected-button: linear-gradient(0deg, var(--light-green), white);
-  --cursor-circle: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" style="font-size: 32px;"><text style="fill:blue" x="-2" y="21">◌</text></svg>'),auto;
+  --cursor-circle: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="font-size: 64px;"><text style="fill:blue" y="48">◌</text></svg>') 32 32,auto;
+  --cursor-fire: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="font-size: 64px;"><text style="fill:blue" y="54">🔥</text></svg>') 32 32,auto;
+  --cursor-snow: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="font-size: 64px;"><text style="fill:blue" y="48">❄</text></svg>') 32 32,auto;
 }
 
 /* Global stuff */
@@ -65,10 +67,6 @@ input#heatTab:checked ~ .controls>.tab.heat
   display: flex;
 }
 
-#addTab:checked ~ canvas {
-  cursor: var(--cursor-circle);
-}
-
 /* within a tab */
 .tab>label {
   display: grid;
@@ -79,6 +77,10 @@ input#heatTab:checked ~ .controls>.tab.heat
   width: 4rem;
 }
 
+/* The Add tab */
+#addTab:checked ~ canvas {
+  cursor: var(--cursor-circle);
+}
 .tab.add>.mode {
   display: flex;
   flex-direction: row;
@@ -94,6 +96,14 @@ input#heatTab:checked ~ .controls>.tab.heat
 }
 .tab.add>.mode input[type=radio]:checked + label {
   background: var(--selected-button);
+}
+
+/* The Heat tab */
+#heatTab:checked ~ canvas {
+  cursor: var(--cursor-fire);
+}
+#heatTab:checked ~ canvas.cold {
+  cursor: var(--cursor-snow);
 }
 
 /* The play/pause button */
