@@ -6,7 +6,7 @@ use nphysics2d::material::{BasicMaterial, MaterialHandle};
 use nphysics2d::math::Velocity;
 use nphysics2d::object::{
     BodyPartHandle, ColliderDesc, DefaultBodySet, DefaultColliderSet, Ground,
-    RigidBodyDesc,
+    RigidBody, RigidBodyDesc, Body,
 };
 use nphysics2d::world::{DefaultGeometricalWorld, DefaultMechanicalWorld};
 use rand;
@@ -40,7 +40,7 @@ pub struct World {
     colliders: DefaultColliderSet<f32>,
     joint_constraints: DefaultJointConstraintSet<f32>,
     force_generators: DefaultForceGeneratorSet<f32>,
-    positions: Vec<(f32, f32)>,
+    positions: Vec<(f32, f32, f32)>,
     width: f32,
     height: f32,
     pub num_particles: usize,
@@ -136,6 +136,7 @@ impl World {
                 ))
                 .mass(mass)
                 .sleep_threshold(None)
+                .user_data(radius)
                 .build();
             let handle = self.bodies.insert(rigid_body);
 
@@ -171,13 +172,16 @@ impl World {
             })
             .map(|(col_h, bod_h, _)| (col_h, bod_h))
             .collect();
+
+        self.num_particles -= bodies.len();
+
         bodies.iter().for_each(|(col_h, bod_h)| {
             self.bodies.remove(*bod_h);
             self.colliders.remove(*col_h);
         });
     }
 
-    pub fn step(&mut self) -> *const (f32, f32) {
+    pub fn step(&mut self) -> *const (f32, f32, f32) {
         // Run the simulation.
         self.mech.step(
             &mut self.geo,
@@ -190,10 +194,14 @@ impl World {
         self.positions = self
             .bodies
             .iter()
-            .filter(|(_, body)| !body.is_ground())
-            .map(|(_, body)| {
+            .filter_map(|(_, body)| if !body.is_ground() {
+                body.downcast_ref::<RigidBody<_>>()
+            } else {
+                None
+            })
+            .map(|body| {
                 let pos = body.part(0).unwrap().position().translation.vector;
-                (pos.x, pos.y)
+                (pos.x, pos.y, *body.user_data().unwrap().downcast_ref::<f32>().unwrap())
             })
             .collect();
         self.positions.as_ptr()

@@ -75,7 +75,7 @@ let control = {
     e.preventDefault();
     let form = $('form.tab.add');
     let [rate, radius, mass, heat] = [
-      10 / pint(form.rate.value), pint(form.radius.value), pint(form.mass.value), pint(form.heat.value)];
+      pint(form.rate.value), pint(form.radius.value), pint(form.mass.value), pint(form.heat.value)];
     let add = form.modifyParticles.value === 'add';
 
     if (add) {
@@ -128,23 +128,24 @@ let control = {
   },
 
   renderLoop: () => {
+    const tuple_len = 3;
     const coordsPtr = control.world.step();
     const numPoints = control.world.num_particles;
     const coords = new Float32Array(
-      control.wasm.memory.buffer, coordsPtr, numPoints * 2)
+      control.wasm.memory.buffer, coordsPtr, numPoints * tuple_len)
 
     //control.world.temperature(.99);
 
     let ctx = control.ctx;
     let [width, height] = [ctx.canvas.width, ctx.canvas.height];
     ctx.clearRect(0, 0, width, height);
-    for (let i = 0; i < 2 * numPoints; i += 2) {
+    for (let i = 0; i < tuple_len * numPoints; i += tuple_len) {
       ctx.beginPath();
       ctx.ellipse(
         // x, y
         coords[i], height - coords[i + 1],
         // radiusX, radiusY
-        10, 10,
+        coords[i + 2], coords[i + 2],
         // rotation
         0,
         // startAngle, endAngle

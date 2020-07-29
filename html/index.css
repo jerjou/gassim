@@ -127,6 +127,7 @@ input#heatTab:checked ~ .controls>.tab.heat
   position: relative;
   top: -.2rem;
   right: -.2rem;
+  text-shadow: 0 0 3px var(--grey);
 }
 #play:checked + label::before {
   content: '⏸';
