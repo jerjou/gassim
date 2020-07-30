@@ -92,6 +92,7 @@ let control = {
   initMouse: canvas => {
     window.addEventListener('mouseup', e => control.mousedown = false);
     canvas.addEventListener('mousemove', e => control.mouseCoord = coord(e));
+    canvas.addEventListener('mouseenter', e => control.mouseCoord = coord(e));
   },
 
   // keyboard shortcuts
@@ -153,7 +154,6 @@ let control = {
   },
 
   addParticles: e => {
-    e.preventDefault();
     let form = $('form.tab.add');
     let [rate, radius, mass, heat] = [
       pint(form.rate.value), pint(form.radius.value), pint(form.mass.value), pint(form.heat.value)];
@@ -179,7 +179,6 @@ let control = {
   },
 
   addHeat: e => {
-    e.preventDefault();
     let form = $('form.tab.heat');
     let [factor, radius] = [pfloat(form.factor.value), pint(form.radius.value)];
 

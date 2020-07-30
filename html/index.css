@@ -6,8 +6,11 @@
   --border: 1px solid var(--grey);
   --hover-button: linear-gradient(0deg, var(--light-grey), white);
   --selected-button: linear-gradient(0deg, var(--light-green), white);
+  --cursor-circle-inactive: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="font-size: 64px;opacity:.5"><text style="fill:blue" y="48" >◌</text></svg>') 32 32,auto;
   --cursor-circle: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="font-size: 64px;"><text style="fill:blue" y="48">◌</text></svg>') 32 32,auto;
+  --cursor-fire-inactive: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="font-size: 64px;opacity:.5"><text style="fill:blue;" y="54">🔥</text></svg>') 32 32,auto;
   --cursor-fire: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="font-size: 64px;"><text style="fill:blue" y="54">🔥</text></svg>') 32 32,auto;
+  --cursor-snow-inactive: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="font-size: 64px;opacity:.5"><text style="fill:blue" y="48">❄</text></svg>') 32 32,auto;
   --cursor-snow: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="font-size: 64px;"><text style="fill:blue" y="48">❄</text></svg>') 32 32,auto;
 }
 
@@ -103,6 +106,9 @@ input#heatTab:checked ~ .controls>.tab.heat
 
 /* The Add tab */
 #addTab:checked ~ canvas {
+  cursor: var(--cursor-circle-inactive);
+}
+#addTab:checked ~ canvas:active {
   cursor: var(--cursor-circle);
 }
 .tab.add>.mode {
@@ -124,9 +130,15 @@ input#heatTab:checked ~ .controls>.tab.heat
 
 /* The Heat tab */
 #heatTab:checked ~ canvas {
+  cursor: var(--cursor-fire-inactive);
+}
+#heatTab:checked ~ canvas:active {
   cursor: var(--cursor-fire);
 }
 #heatTab:checked ~ canvas.cold {
+  cursor: var(--cursor-snow-inactive);
+}
+#heatTab:checked ~ canvas.cold:active {
   cursor: var(--cursor-snow);
 }
 
