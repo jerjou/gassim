@@ -1,13 +1,15 @@
 use nalgebra::{Isometry2, Vector2};
 use ncollide2d::shape::{Ball, Compound, Cuboid, ShapeHandle};
 use nphysics2d::force_generator::DefaultForceGeneratorSet;
+use nphysics2d::force_generator::ForceGenerator;
 use nphysics2d::joint::DefaultJointConstraintSet;
 use nphysics2d::material::{BasicMaterial, MaterialHandle};
-use nphysics2d::math::Velocity;
+use nphysics2d::math::{Force, ForceType, Velocity};
 use nphysics2d::object::{
-    BodyPartHandle, ColliderDesc, DefaultBodySet, DefaultColliderSet, Ground,
-    RigidBody, RigidBodyDesc, Body,
+    Body, BodyHandle, BodyPartHandle, BodySet, ColliderDesc, DefaultBodySet, DefaultColliderSet,
+    Ground, RigidBody, RigidBodyDesc,
 };
+use nphysics2d::solver::IntegrationParameters;
 use nphysics2d::world::{DefaultGeometricalWorld, DefaultMechanicalWorld};
 use rand;
 use rand::prelude::*;
@@ -19,17 +21,17 @@ use wasm_bindgen::prelude::*;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+macro_rules! log {
+    ( $( $x:expr ),* ) => {
+        log(&format!($($x,)*));
+    };
+}
+
 #[wasm_bindgen]
 extern "C" {
     fn alert(s: &str);
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
-}
-
-macro_rules! log {
-    ( $( $x:expr ),* ) => {
-        log(&format!($($x,)*));
-    };
 }
 
 #[wasm_bindgen]
@@ -55,6 +57,7 @@ impl World {
         radius: f32,
         mass: f32,
         heat: f32,
+        van_der_waals: f32,
     ) -> Self {
         console_error_panic_hook::set_once();
         let mechanical_world = DefaultMechanicalWorld::new(Vector2::new(0.0, gravity));
@@ -63,7 +66,7 @@ impl World {
         let mut bodies = DefaultBodySet::new();
         let mut colliders = DefaultColliderSet::new();
         let joint_constraints = DefaultJointConstraintSet::new();
-        let force_generators = DefaultForceGeneratorSet::new();
+        let mut force_generators = DefaultForceGeneratorSet::new();
 
         // Create box boundaries
         const WALL_WIDTH: f32 = 100.; // Thick wall width to ensure it's impenetrable
@@ -93,6 +96,12 @@ impl World {
                 .material(MaterialHandle::new(BasicMaterial::new(1.0, 0.0)))
                 .build(BodyPartHandle(ground_handle, 0)),
         );
+
+        // Add Van Der Waals forces between the particles
+        if van_der_waals < 0. {
+            log!("Adding Van Der Waals force {}", van_der_waals);
+            force_generators.insert(Box::new(VanDerWaalsForce(van_der_waals, 64.)));
+        }
 
         // Seed it with particles
         let rng = rand::thread_rng();
@@ -128,8 +137,8 @@ impl World {
                 .position(Isometry2::new(Vector2::new(x, y), 0.))
                 .gravity_enabled(true)
                 .velocity(Velocity::linear(
-                        heat * self.rng.gen::<f32>() - heat / 2.,
-                        heat * self.rng.gen::<f32>() - heat / 2.,
+                    heat * self.rng.gen::<f32>() - heat / 2.,
+                    heat * self.rng.gen::<f32>() - heat / 2.,
                 ))
                 .mass(mass)
                 .sleep_threshold(None)
@@ -139,10 +148,10 @@ impl World {
 
             self.colliders.insert(
                 ColliderDesc::new(ShapeHandle::new(Ball::new(radius)))
-                // restitution, friction: 0.5
-                .material(MaterialHandle::new(BasicMaterial::new(1.0, 0.0)))
-                .margin(0.5)
-                .build(BodyPartHandle(handle, 0)),
+                    // restitution, friction: 0.5
+                    .material(MaterialHandle::new(BasicMaterial::new(1.0, 0.0)))
+                    .margin(0.5)
+                    .build(BodyPartHandle(handle, 0)),
             );
         });
 
@@ -152,7 +161,8 @@ impl World {
     pub fn remove_particles(&mut self, x: f32, y: f32, radius: f32) {
         log!("Removing particle from {}, {}", x, y);
         let r2 = radius.powi(2);
-        let bodies: Vec<_> = self.colliders
+        let bodies: Vec<_> = self
+            .colliders
             .iter()
             .map(|(col_h, collider)| {
                 (
@@ -190,14 +200,20 @@ impl World {
         self.positions = self
             .bodies
             .iter()
-            .filter_map(|(_, body)| if !body.is_ground() {
-                body.downcast_ref::<RigidBody<_>>()
-            } else {
-                None
+            .filter_map(|(_, body)| {
+                if !body.is_ground() {
+                    body.downcast_ref::<RigidBody<_>>()
+                } else {
+                    None
+                }
             })
             .map(|body| {
                 let pos = body.part(0).unwrap().position().translation.vector;
-                (pos.x, pos.y, *body.user_data().unwrap().downcast_ref::<f32>().unwrap())
+                (
+                    pos.x,
+                    pos.y,
+                    *body.user_data().unwrap().downcast_ref::<f32>().unwrap(),
+                )
             })
             .collect();
         self.positions.as_ptr()
@@ -230,19 +246,30 @@ impl World {
     }
 }
 
-#[wasm_bindgen]
-pub fn hello() -> Result<(), JsValue> {
-    log("Hello, wasm!");
-    // Use `web_sys`'s global `window` function to get a handle on the global
-    // window object.
-    let window = web_sys::window().expect("no global `window` exists");
-    let document = window.document().expect("should have a document on window");
-    let body = document.body().expect("document should have a body");
+// (force_magnitude, distance_threshold)
+struct VanDerWaalsForce(f32, f32);
+impl<H: BodyHandle> ForceGenerator<f32, H> for VanDerWaalsForce {
+    fn apply(&mut self, _: &IntegrationParameters<f32>, bodies: &mut dyn BodySet<f32, Handle = H>) {
+        let mut positions = vec![];
+        bodies.foreach(&mut |_, body: &dyn Body<f32>| {
+            if !body.is_ground() {
+                positions.push(body.part(0).unwrap().center_of_mass())
+            }
+        });
 
-    // Manufacture the element we're gonna append
-    let val = document.create_element("p")?;
-    val.set_inner_html("Hello from Rust!");
-
-    body.append_child(&val)?;
-    Ok(())
+        for pos in positions {
+            bodies.foreach_mut(&mut |_, body: &mut dyn Body<f32>| {
+                if body.is_ground() {
+                    return;
+                };
+                let distance = body.part(0).unwrap().center_of_mass() - pos;
+                let norm = distance.norm();
+                if norm > self.1 || norm == 0. {
+                    return;
+                }
+                let force = Force::linear(self.0 * distance / norm.powi(3));
+                body.apply_force(0, &force, ForceType::Force, true);
+            });
+        }
+    }
 }

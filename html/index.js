@@ -53,7 +53,7 @@ let control = {
       canvas.style.width = `${canvas.width = width}px`;
       canvas.style.height = `${canvas.height = height}px`;
 
-      control.world = World.new(width, height, gravity, numPoints, radius, mass, heat);
+      control.world = World.new(width, height, gravity, numPoints, radius, mass, heat, 0);
       form.timestep.value = Math.round(control.world.timestep() * TIMESTEP_FACTOR);
     };
 
