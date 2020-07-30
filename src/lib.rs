@@ -1,4 +1,4 @@
-use nalgebra::{Isometry2, Vector2};
+use nalgebra::{Isometry2, Point2, Vector2};
 use ncollide2d::shape::{Ball, Compound, Cuboid, ShapeHandle};
 use nphysics2d::force_generator::DefaultForceGeneratorSet;
 use nphysics2d::force_generator::ForceGenerator;
@@ -103,7 +103,13 @@ impl World {
         // Add Van Der Waals forces between the particles
         if van_der_waals < 0. {
             log!("Adding Van Der Waals force {}", van_der_waals);
-            force_generators.insert(Box::new(VanDerWaalsForce(van_der_waals, 64.)));
+            force_generators.insert(Box::new(VanDerWaalsForce {
+                magnitude: van_der_waals,
+                distance_threshold: 128,
+                world_width: width as usize,
+                world_height: height as usize,
+                num_particles,
+            }));
         }
 
         // Seed it with particles
@@ -253,12 +259,92 @@ impl World {
     }
 }
 
-// (force_magnitude, distance_threshold)
-struct VanDerWaalsForce(f32, f32);
+struct Buckets2d<H: Copy> {
+    width: usize,
+    height: usize,
+    elements: Vec<(H, Point2<f32>)>,
+    bucket_size: usize,
+    bucket_heads: Vec<Option<usize>>, // the first element in the linked list
+    next_elements: Vec<Option<usize>>, // the index is the left element, the value is the right element>
+}
+impl<H: Copy> Buckets2d<H> {
+    pub fn new<T: Copy>(
+        elements: &Vec<(H, Point2<f32>, T)>,
+        bucket_size: usize,
+        world_width: usize,
+        world_height: usize,
+    ) -> Self {
+        let (width, height) = (1 + world_width / bucket_size, 1 + world_height / bucket_size);
+        let mut bucket_heads = vec![None; width * height];
+        let mut next_elements = vec![None; elements.len()];
+        let elements: Vec<_> = elements.iter().copied().map(|(h, p, _)| (h, p)).collect();
+        for (i, (_, pos)) in elements.iter().enumerate() {
+            let bucket_pos = (pos[0] as usize / bucket_size, pos[1] as usize / bucket_size);
+            let bucket_idx = Self::to_idx(width, bucket_pos);
+            let prev_first = bucket_heads[bucket_idx];
+            bucket_heads[bucket_idx] = Some(i);
+            if let Some(_) = prev_first {
+                next_elements[i] = prev_first;
+            }
+        }
+        Self {
+            width,
+            height,
+            bucket_size,
+            bucket_heads,
+            next_elements,
+            elements,
+        }
+    }
+    fn to_idx(width: usize, (x, y): (usize, usize)) -> usize {
+        x + y * width
+    }
+    pub fn get_bucket_contents(
+        &self,
+        pos: &Point2<f32>,
+        dx: i64,
+        dy: i64,
+    ) -> Option<Vec<(H, Point2<f32>)>> {
+        let o_bucket = (
+            pos[0] as usize / self.bucket_size,
+            pos[1] as usize / self.bucket_size,
+        );
+        let bucket = (o_bucket.0 as i64 + dx, o_bucket.1 as i64 + dy);
+        // Make sure the neighbor is within bounds
+        if bucket.0 < 0 || bucket.1 < 0 {
+            return None;
+        }
+        let bucket = (bucket.0 as usize, bucket.1 as usize);
+        if bucket.0 >= self.width || bucket.1 >= self.height {
+            return None;
+        }
+
+        let mut bucket_contents = Vec::with_capacity(self.next_elements.len());
+        if let Some(mut idx) = self.bucket_heads[Self::to_idx(self.width, bucket)] {
+            bucket_contents.push(self.elements[idx]);
+            while let Some(next_idx) = self.next_elements[idx] {
+                bucket_contents.push(self.elements[next_idx]);
+                idx = next_idx;
+            }
+            Some(bucket_contents)
+        } else {
+            None
+        }
+    }
+}
+
+struct VanDerWaalsForce {
+    magnitude: f32,
+    distance_threshold: usize,
+    num_particles: usize,
+    world_width: usize,
+    world_height: usize,
+}
 impl<H: BodyHandle> ForceGenerator<f32, H> for VanDerWaalsForce {
     fn apply(&mut self, _: &IntegrationParameters<f32>, bodies: &mut dyn BodySet<f32, Handle = H>) {
-        let mut positions = vec![];
-        bodies.foreach(&mut |_, body: &dyn Body<f32>| {
+        // First, put the stupid bodyset into a vector for easier manipulation
+        let mut particles = Vec::with_capacity(self.num_particles + 8);
+        bodies.foreach(&mut |bh, body: &dyn Body<f32>| {
             if !body.is_ground() {
                 let radius = *body
                     .downcast_ref::<RigidBody<f32>>()
@@ -267,32 +353,48 @@ impl<H: BodyHandle> ForceGenerator<f32, H> for VanDerWaalsForce {
                     .unwrap()
                     .downcast_ref::<f32>()
                     .unwrap();
-                positions.push((body.part(0).unwrap().center_of_mass(), radius))
+                particles.push((bh, body.part(0).unwrap().center_of_mass(), radius))
             }
         });
+        self.num_particles = particles.len();
 
-        for (pos, r1) in positions {
-            bodies.foreach_mut(&mut |_, body: &mut dyn Body<f32>| {
-                if body.is_ground() {
-                    return;
-                };
-                let distance = body.part(0).unwrap().center_of_mass() - pos;
-                let norm = distance.norm();
-                if norm == 0. || norm > 12. * r1 {
-                    return;
+        // Put all the particles into cells to reduce the number of comparisons we need to do
+        let cells = Buckets2d::new(
+            &particles,
+            self.distance_threshold,
+            self.world_width,
+            self.world_height,
+        );
+
+        // Because the cell assigments are rounded, we have to check neighbor cells too
+        let neighbor_cells_affected = [(0, 0), (1, 0), (1, -1), (0, -1), (-1, -1)];
+        let distance_threshold = self.distance_threshold as f32;
+        particles.iter().for_each(|(_, pos1, r1)| {
+            neighbor_cells_affected.iter().for_each(|(dx, dy)| {
+                if let Some(p2s) = cells.get_bucket_contents(pos1, *dx, *dy) {
+                    for (bh2, pos2) in p2s {
+                        let distance = pos2 - pos1;
+                        let norm = distance.norm();
+                        if norm <= 0. || norm > distance_threshold {
+                            continue;
+                        }
+                        let body = bodies.get_mut(bh2).unwrap();
+                        let r2 = *body
+                            .downcast_ref::<RigidBody<f32>>()
+                            .unwrap()
+                            .user_data()
+                            .unwrap()
+                            .downcast_ref::<f32>()
+                            .unwrap();
+                        // One of those `norm`s is to reduce `distance` to a unit vector
+                        let force = Force::linear(
+                            self.magnitude * r1 * r2 * distance
+                                / ((r1 + r2) * distance.norm().powi(3)),
+                        );
+                        body.apply_force(0, &force, ForceType::Force, false);
+                    }
                 }
-
-                let r2 = *body
-                    .downcast_ref::<RigidBody<f32>>()
-                    .unwrap()
-                    .user_data()
-                    .unwrap()
-                    .downcast_ref::<f32>()
-                    .unwrap();
-                // One of those `norm`s is to reduce `distance` to a unit vector
-                let force = Force::linear(self.0 * r1 * r2 * distance / ((r1 + r2) * norm.powi(3)));
-                body.apply_force(0, &force, ForceType::Force, false);
             });
-        }
+        });
     }
 }
