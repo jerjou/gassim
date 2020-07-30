@@ -21,6 +21,8 @@ use wasm_bindgen::prelude::*;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+const RESTITUTION: f32 = 0.97;
+
 macro_rules! log {
     ( $( $x:expr ),* ) => {
         log(&format!($($x,)*));
@@ -93,7 +95,8 @@ impl World {
         colliders.insert(
             ColliderDesc::new(ground_shape)
                 //.translation(Vector2::y() * height)
-                .material(MaterialHandle::new(BasicMaterial::new(1.0, 0.0)))
+                // restitution, friction: 0.5
+                .material(MaterialHandle::new(BasicMaterial::new(RESTITUTION, 0.0)))
                 .build(BodyPartHandle(ground_handle, 0)),
         );
 
@@ -149,7 +152,7 @@ impl World {
             self.colliders.insert(
                 ColliderDesc::new(ShapeHandle::new(Ball::new(radius)))
                     // restitution, friction: 0.5
-                    .material(MaterialHandle::new(BasicMaterial::new(1.0, 0.0)))
+                    .material(MaterialHandle::new(BasicMaterial::new(RESTITUTION, 0.0)))
                     .margin(0.5)
                     .build(BodyPartHandle(handle, 0)),
             );
@@ -188,15 +191,7 @@ impl World {
         });
     }
 
-    pub fn step(&mut self) -> *const (f32, f32, f32) {
-        // Run the simulation.
-        self.mech.step(
-            &mut self.geo,
-            &mut self.bodies,
-            &mut self.colliders,
-            &mut self.joint_constraints,
-            &mut self.force_generators,
-        );
+    pub fn update_positions(&mut self) -> *const (f32, f32, f32) {
         self.positions = self
             .bodies
             .iter()
@@ -217,6 +212,18 @@ impl World {
             })
             .collect();
         self.positions.as_ptr()
+    }
+
+    pub fn step(&mut self) -> *const (f32, f32, f32) {
+        // Run the simulation.
+        self.mech.step(
+            &mut self.geo,
+            &mut self.bodies,
+            &mut self.colliders,
+            &mut self.joint_constraints,
+            &mut self.force_generators,
+        );
+        self.update_positions()
     }
 
     pub fn temperature(&mut self, x: f32, y: f32, radius: f32, factor: f32) {
@@ -253,22 +260,38 @@ impl<H: BodyHandle> ForceGenerator<f32, H> for VanDerWaalsForce {
         let mut positions = vec![];
         bodies.foreach(&mut |_, body: &dyn Body<f32>| {
             if !body.is_ground() {
-                positions.push(body.part(0).unwrap().center_of_mass())
+                let radius = *body
+                    .downcast_ref::<RigidBody<f32>>()
+                    .unwrap()
+                    .user_data()
+                    .unwrap()
+                    .downcast_ref::<f32>()
+                    .unwrap();
+                positions.push((body.part(0).unwrap().center_of_mass(), radius))
             }
         });
 
-        for pos in positions {
+        for (pos, r1) in positions {
             bodies.foreach_mut(&mut |_, body: &mut dyn Body<f32>| {
                 if body.is_ground() {
                     return;
                 };
                 let distance = body.part(0).unwrap().center_of_mass() - pos;
                 let norm = distance.norm();
-                if norm > self.1 || norm == 0. {
+                if norm == 0. || norm > 12. * r1 {
                     return;
                 }
-                let force = Force::linear(self.0 * distance / norm.powi(3));
-                body.apply_force(0, &force, ForceType::Force, true);
+
+                let r2 = *body
+                    .downcast_ref::<RigidBody<f32>>()
+                    .unwrap()
+                    .user_data()
+                    .unwrap()
+                    .downcast_ref::<f32>()
+                    .unwrap();
+                // One of those `norm`s is to reduce `distance` to a unit vector
+                let force = Force::linear(self.0 * r1 * r2 * distance / ((r1 + r2) * norm.powi(3)));
+                body.apply_force(0, &force, ForceType::Force, false);
             });
         }
     }

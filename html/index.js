@@ -32,6 +32,7 @@ let control = {
     });
 
     control.initMouse(canvas);
+    control.initKeyboard();
     control.initHeat(canvas);
     control.initParticles(canvas);
     control.initNumberScroll();
@@ -53,7 +54,7 @@ let control = {
       canvas.style.width = `${canvas.width = width}px`;
       canvas.style.height = `${canvas.height = height}px`;
 
-      control.world = World.new(width, height, gravity, numPoints, radius, mass, heat, 0);
+      control.world = World.new(width, height, gravity, numPoints, radius, mass, heat, -600);
       form.timestep.value = Math.round(control.world.timestep() * TIMESTEP_FACTOR);
     };
 
@@ -87,6 +88,50 @@ let control = {
       }
     });
   },
+
+  initMouse: canvas => {
+    window.addEventListener('mouseup', e => control.mousedown = false);
+    canvas.addEventListener('mousemove', e => control.mouseCoord = coord(e));
+  },
+
+  // keyboard shortcuts
+  kbdShortcuts: {
+    f: e => $('#heatTab').checked = true,
+    h: e => $('#setupTab').checked = true,
+    o: e => $('#addTab').checked = true,
+    p: e => {
+      let p = $('#play');
+      p.checked = !p.checked;
+      p.dispatchEvent(new InputEvent('change'));
+    },
+  },
+  initKeyboard: _ => {
+    window.addEventListener('keydown', e => {
+      (control.kbdShortcuts[e.key] || console.log)(e);
+    });
+  },
+
+  initHeat: canvas => {
+    let heatTab = $('#heatTab');
+    canvas.addEventListener('mouseenter', e => {
+      if (pfloat($('form.tab.heat').factor.value) < 1) {
+        canvas.classList.add('cold');
+      } else {
+        canvas.classList.remove('cold');
+      }
+    });
+    canvas.addEventListener('mousedown', e => {
+      if (heatTab.checked) control.addHeat(e);
+    });
+  },
+
+  // Adding/remove particles as you drag around the canvas
+  initParticles: canvas => {
+    canvas.addEventListener('mousedown', (e) => {
+      if ($('#addTab').checked) control.addParticles(e);
+    });
+  },
+
   // `rate` is in particles/60 frames
   _continuouslyDo: (rate, f, threshold=30, iter=0) => {
     control.mousedown = true;
@@ -106,6 +151,7 @@ let control = {
     }
     doF();
   },
+
   addParticles: e => {
     e.preventDefault();
     let form = $('form.tab.add');
@@ -118,7 +164,7 @@ let control = {
         control.world.add_particles(x, y, radius, mass, heat, numParticles);
         // Update the world so we can see the new particle
         if (!control.playEl.checked) {
-          control.renderLoop();
+          control.renderLoop(0, control.world.update_positions());
         }
       });
     } else {
@@ -126,11 +172,12 @@ let control = {
         control.world.remove_particles(x, y, 128);
         // Update the world so we can see the new particle
         if (!control.playEl.checked) {
-          control.renderLoop();
+          control.renderLoop(0, control.world.update_positions());
         }
       });
     }
   },
+
   addHeat: e => {
     e.preventDefault();
     let form = $('form.tab.heat');
@@ -139,36 +186,14 @@ let control = {
     control._continuouslyDo(30, (x, y) => control.world.temperature(x, y, radius, factor));
   },
 
-  initMouse: canvas => {
-    window.addEventListener('mouseup', e => control.mousedown = false);
-    canvas.addEventListener('mousemove', e => control.mouseCoord = coord(e));
-  },
-  initHeat: canvas => {
-    let heatTab = $('#heatTab');
-    canvas.addEventListener('mouseenter', e => {
-      if (pfloat($('form.tab.heat').factor.value) < 1) {
-        canvas.classList.add('cold');
-      } else {
-        canvas.classList.remove('cold');
-      }
-    });
-    canvas.addEventListener('mousedown', e => {
-      if (heatTab.checked) control.addHeat(e);
-    });
-  },
-  // Adding/remove particles as you drag around the canvas
-  initParticles: canvas => {
-    canvas.addEventListener('mousedown', (e) => {
-      if ($('#addTab').checked) control.addParticles(e);
-    });
-  },
-
-  renderLoop: () => {
+  renderLoop: (time, positionsPtr) => {
     const tuple_len = 3;
-    const coordsPtr = control.world.step();
+    if (!positionsPtr) {
+      positionsPtr = control.world.step();
+    }
     const numPoints = control.world.num_particles;
     const coords = new Float32Array(
-      control.wasm.memory.buffer, coordsPtr, numPoints * tuple_len)
+      control.wasm.memory.buffer, positionsPtr, numPoints * tuple_len)
 
     //control.world.temperature(.99);
 
