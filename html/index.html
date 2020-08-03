@@ -22,7 +22,7 @@
         <label>Height: <input type=number name=height min=100 value=600 /></label>
         <label># particles: <input type=number name=n min=0 value=30 /></label>
         <label>Radius: <input type=number name=radius min=1 value=10 /></label>
-        <label>Mass: <input type=number name=mass min=1 value=1 /></label>
+        <label>Density: <input type=number name=density min=1 value=1 /></label>
         <label>Heat: <input type=number name=heat min=1 value=500 /></label>
         <label>Gravity: <input type=number name=gravity max=0 step=.01 value=-0.1 /></label>
         <button>Reload</button>
@@ -38,7 +38,7 @@
       <form class='tab add'>
         <label>Rate: <input type=number name=rate min=1 value=5 /></label>
         <label>Radius: <input type=number name=radius min=1 value=10 /></label>
-        <label>Mass: <input type=number name=mass min=1 value=1 /></label>
+        <label>Density: <input type=number name=density min=1 value=1 /></label>
         <label>Heat: <input type=number name=heat min=1 value=500 /></label>
         <div class=mode>
           <input type=radio name=modifyParticles id=addParticles value=add checked />
@@ -55,7 +55,7 @@
       </form>
 
       <form class='tab heat'>
-        <label>Factor: <input type=number name=factor min=0 step=.01 value=1.1 /></label>
+        <label>Factor: <input type=number name=factor min=0 max=2 step=.01 value=1.1 /></label>
         <label>Radius: <input type=number name=radius min=1 value=50 /></label>
         <div class="spacer"></div>
         <div class=descr>

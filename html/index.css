@@ -29,16 +29,19 @@ form {
 body {
   display: flex;
   flex-direction: row;
+  justify-content: center;
+  flex-wrap: wrap;
   font-family: sans-serif;
 }
 
 canvas {
   border: var(--border);
+  margin-bottom: 1rem;
 }
 .controls {
   position: relative;
   box-sizing: border-box;
-  flex-grow: 1;
+  max-width: 21rem;
 
   display: flex;
   flex-direction: column;
@@ -92,6 +95,7 @@ input#heatTab:checked ~ .controls>.tab.heat
 }
 .tab>.spacer {
   flex-grow: 1;
+  margin: .5rem;
 }
 .tab>.descr {
   font: italic .9rem sans-serif;

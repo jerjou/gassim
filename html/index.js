@@ -47,7 +47,7 @@ let control = {
       let height = pint(form.height.value);
       let numPoints = pint(form.n.value);
       let radius = pint(form.radius.value);
-      let mass = pfloat(form.mass.value);
+      let mass = pfloat(form.density.value) * radius * radius * 3.14159;
       let heat = pint(form.heat.value);
       let gravity = pfloat(form.gravity.value) * 100;
 
@@ -155,8 +155,11 @@ let control = {
 
   addParticles: e => {
     let form = $('form.tab.add');
-    let [rate, radius, mass, heat] = [
-      pint(form.rate.value), pint(form.radius.value), pint(form.mass.value), pint(form.heat.value)];
+    let radius = pint(form.radius.value);
+    let [rate, mass, heat] = [
+      pint(form.rate.value),
+      pfloat(form.density.value) * radius * radius * 3.14159,
+      pint(form.heat.value)];
     let add = form.modifyParticles.value === 'add';
 
     if (add) {
@@ -180,7 +183,7 @@ let control = {
 
   addHeat: e => {
     let form = $('form.tab.heat');
-    let [factor, radius] = [pfloat(form.factor.value), pint(form.radius.value)];
+    let [factor, radius] = [pfloat(form.factor.value) / 5, pint(form.radius.value)];
 
     control._continuouslyDo(30, (x, y) => control.world.temperature(x, y, radius, factor));
   },
