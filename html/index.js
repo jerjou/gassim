@@ -1,4 +1,4 @@
-import init, { World } from '../pkg/wasm.js';
+import init, { World } from './js/gassim.js';
 
 const $ = q => document.querySelector(q);
 const $el = (t, p) => {
@@ -50,11 +50,12 @@ let control = {
       let mass = pfloat(form.density.value) * radius * radius * 3.14159;
       let heat = pint(form.heat.value);
       let gravity = pfloat(form.gravity.value) * 100;
+      let vdw = pint(form.vdw.value) * 1000;
 
       canvas.style.width = `${canvas.width = width}px`;
       canvas.style.height = `${canvas.height = height}px`;
 
-      control.world = World.new(width, height, gravity, numPoints, radius, mass, heat, -600);
+      control.world = World.new(width, height, gravity, numPoints, radius, mass, heat, vdw);
       form.timestep.value = Math.round(control.world.timestep() * TIMESTEP_FACTOR);
     };
 
@@ -64,11 +65,12 @@ let control = {
     });
     resetWorld();
 
-    // Ability to update timestep on the fly
+    // Ability to update some properties on the fly
     form.timestep.addEventListener('change', e => {
-      let timestep = pint(e.target.value)
-      if (timestep > 0)
-        control.world.set_timestep(timestep / TIMESTEP_FACTOR);
+      control.world.set_timestep(pint(e.target.value, 1) / TIMESTEP_FACTOR);
+    });
+    form.gravity.addEventListener('change', e => {
+      control.world.set_gravity(pfloat(e.target.value, -9.8) * 100);
     });
 
     control.renderLoop();
@@ -76,7 +78,7 @@ let control = {
 
   // Use the scroll wheel to change the number like a dial
   initNumberScroll: () => {
-    document.body.addEventListener('wheel', (e) => {
+    document.body.addEventListener('wheel', e => {
       let el = e.target;
       if (!el.matches('input[type=number]')) return;
       if (el.step === 'any') return;

@@ -21,7 +21,7 @@ use wasm_bindgen::prelude::*;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-const RESTITUTION: f32 = 0.97;
+const RESTITUTION: f32 = 0.91;
 
 macro_rules! log {
     ( $( $x:expr ),* ) => {
@@ -96,7 +96,7 @@ impl World {
             ColliderDesc::new(ground_shape)
                 //.translation(Vector2::y() * height)
                 // restitution, friction: 0.5
-                .material(MaterialHandle::new(BasicMaterial::new(RESTITUTION, 0.0)))
+                .material(MaterialHandle::new(BasicMaterial::new(0.97, 0.0)))
                 .build(BodyPartHandle(ground_handle, 0)),
         );
 
@@ -257,19 +257,25 @@ impl World {
     pub fn set_timestep(&mut self, timestep: f32) {
         self.mech.set_timestep(timestep);
     }
+    pub fn gravity(&self) -> Vec<f32> {
+        vec![self.mech.gravity[0], self.mech.gravity[1]]
+    }
+    pub fn set_gravity(&mut self, gravity: f32) {
+        self.mech.gravity = Vector2::y() * gravity;
+    }
 }
 
 struct Buckets2d<H: Copy> {
     width: usize,
     height: usize,
-    elements: Vec<(H, Point2<f32>)>,
+    elements: Vec<(H, Point2<f32>, f32)>,
     bucket_size: usize,
     bucket_heads: Vec<Option<usize>>, // the first element in the linked list
     next_elements: Vec<Option<usize>>, // the index is the left element, the value is the right element>
 }
 impl<H: Copy> Buckets2d<H> {
-    pub fn new<T: Copy>(
-        elements: &Vec<(H, Point2<f32>, T)>,
+    pub fn new(
+        elements: &Vec<(H, Point2<f32>, f32)>,
         bucket_size: usize,
         world_width: usize,
         world_height: usize,
@@ -277,8 +283,7 @@ impl<H: Copy> Buckets2d<H> {
         let (width, height) = (1 + world_width / bucket_size, 1 + world_height / bucket_size);
         let mut bucket_heads = vec![None; width * height];
         let mut next_elements = vec![None; elements.len()];
-        let elements: Vec<_> = elements.iter().copied().map(|(h, p, _)| (h, p)).collect();
-        for (i, (_, pos)) in elements.iter().enumerate() {
+        for (i, (_, pos, _)) in elements.iter().enumerate() {
             let bucket_pos = (pos[0] as usize / bucket_size, pos[1] as usize / bucket_size);
             let bucket_idx = Self::to_idx(width, bucket_pos);
             let prev_first = bucket_heads[bucket_idx];
@@ -293,7 +298,7 @@ impl<H: Copy> Buckets2d<H> {
             bucket_size,
             bucket_heads,
             next_elements,
-            elements,
+            elements: elements.to_vec(),
         }
     }
     fn to_idx(width: usize, (x, y): (usize, usize)) -> usize {
@@ -304,7 +309,7 @@ impl<H: Copy> Buckets2d<H> {
         pos: &Point2<f32>,
         dx: i64,
         dy: i64,
-    ) -> Option<Vec<(H, Point2<f32>)>> {
+    ) -> Option<Vec<(H, Point2<f32>, f32)>> {
         let o_bucket = (
             pos[0] as usize / self.bucket_size,
             pos[1] as usize / self.bucket_size,
@@ -319,8 +324,8 @@ impl<H: Copy> Buckets2d<H> {
             return None;
         }
 
-        let mut bucket_contents = Vec::with_capacity(self.next_elements.len());
         if let Some(mut idx) = self.bucket_heads[Self::to_idx(self.width, bucket)] {
+            let mut bucket_contents = Vec::with_capacity(self.next_elements.len());
             bucket_contents.push(self.elements[idx]);
             while let Some(next_idx) = self.next_elements[idx] {
                 bucket_contents.push(self.elements[next_idx]);
@@ -357,44 +362,56 @@ impl<H: BodyHandle> ForceGenerator<f32, H> for VanDerWaalsForce {
             }
         });
         self.num_particles = particles.len();
-
-        // Put all the particles into cells to reduce the number of comparisons we need to do
-        let cells = Buckets2d::new(
-            &particles,
-            self.distance_threshold,
-            self.world_width,
-            self.world_height,
-        );
-
-        // Because the cell assigments are rounded, we have to check neighbor cells too
-        let neighbor_cells_affected = [(0, 0), (1, 0), (1, -1), (0, -1), (-1, -1)];
         let distance_threshold = self.distance_threshold as f32;
-        particles.iter().for_each(|(_, pos1, r1)| {
-            neighbor_cells_affected.iter().for_each(|(dx, dy)| {
-                if let Some(p2s) = cells.get_bucket_contents(pos1, *dx, *dy) {
-                    for (bh2, pos2) in p2s {
-                        let distance = pos2 - pos1;
-                        let norm = distance.norm();
-                        if norm <= 0. || norm > distance_threshold {
-                            continue;
-                        }
-                        let body = bodies.get_mut(bh2).unwrap();
-                        let r2 = *body
-                            .downcast_ref::<RigidBody<f32>>()
-                            .unwrap()
-                            .user_data()
-                            .unwrap()
-                            .downcast_ref::<f32>()
-                            .unwrap();
-                        // One of those `norm`s is to reduce `distance` to a unit vector
-                        let force = Force::linear(
-                            self.magnitude * r1 * r2 * distance
-                                / ((r1 + r2) * distance.norm().powi(3)),
-                        );
-                        body.apply_force(0, &force, ForceType::Force, false);
+
+        if self.num_particles < 100 {
+            for (_, pos1, r1) in particles.iter() {
+                for (bh, pos2, r2) in particles.iter() {
+                    let distance = pos2 - pos1;
+                    let norm = distance.norm();
+                    if norm <= 0. || norm > distance_threshold {
+                        continue;
                     }
+                    let body = bodies.get_mut(*bh).unwrap();
+                    // One of those `norm`s is to reduce `distance` to a unit vector
+                    let force = Force::linear(
+                        self.magnitude * r1 * r2 * distance
+                        / ((r1 + r2) * distance.norm().powi(3)),
+                    );
+                    body.apply_force(0, &force, ForceType::Force, false);
                 }
+            }
+        } else {
+            // Put all the particles into cells to reduce the number of comparisons we need to do
+            let cells = Buckets2d::new(
+                &particles,
+                self.distance_threshold,
+                self.world_width,
+                self.world_height,
+            );
+
+            // Because the cell assigments are rounded, we have to check neighbor cells too
+            let neighbor_cells_affected = [(0, 0), (1, 0), (1, -1), (0, -1), (-1, -1)];
+            particles.iter().for_each(|(_, pos1, r1)| {
+                neighbor_cells_affected.iter().for_each(|(dx, dy)| {
+                    if let Some(p2s) = cells.get_bucket_contents(pos1, *dx, *dy) {
+                        for (bh2, pos2, r2) in p2s {
+                            let distance = pos2 - pos1;
+                            let norm = distance.norm();
+                            if norm <= 0. || norm > distance_threshold {
+                                continue;
+                            }
+                            let body = bodies.get_mut(bh2).unwrap();
+                            // One of those `norm`s is to reduce `distance` to a unit vector
+                            let force = Force::linear(
+                                self.magnitude * r1 * r2 * distance
+                                / ((r1 + r2) * distance.norm().powi(3)),
+                            );
+                            body.apply_force(0, &force, ForceType::Force, false);
+                        }
+                    }
+                });
             });
-        });
+        }
     }
 }

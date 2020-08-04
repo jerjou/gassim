@@ -10,6 +10,7 @@ trap cleanup INT KILL TERM
 
 while inotifywait -e close_write src/ --exclude \\..*; do
   echo rebuilding
-  wasm-pack build --target=web -- --color=always 2>&1 | head -n $(tput lines)
+  # --release
+  wasm-pack build -d html/js --dev --no-typescript --target=web -- --color=always 2>&1 | head -n $(tput lines)
 done
 cleanup
