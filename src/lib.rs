@@ -21,7 +21,7 @@ use wasm_bindgen::prelude::*;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-const RESTITUTION: f32 = 0.91;
+const RESTITUTION: f32 = 0.99;
 
 macro_rules! log {
     ( $( $x:expr ),* ) => {
@@ -96,7 +96,7 @@ impl World {
             ColliderDesc::new(ground_shape)
                 //.translation(Vector2::y() * height)
                 // restitution, friction: 0.5
-                .material(MaterialHandle::new(BasicMaterial::new(0.97, 0.0)))
+                .material(MaterialHandle::new(BasicMaterial::new(RESTITUTION, 0.0)))
                 .build(BodyPartHandle(ground_handle, 0)),
         );
 
@@ -285,7 +285,7 @@ impl<H: Copy> Buckets2d<H> {
         let mut next_elements = vec![None; elements.len()];
         for (i, (_, pos, _)) in elements.iter().enumerate() {
             let bucket_pos = (pos[0] as usize / bucket_size, pos[1] as usize / bucket_size);
-            let bucket_idx = Self::to_idx(width, bucket_pos);
+            let bucket_idx = Self::to_idx(width, height, bucket_pos);
             let prev_first = bucket_heads[bucket_idx];
             bucket_heads[bucket_idx] = Some(i);
             if let Some(_) = prev_first {
@@ -301,8 +301,14 @@ impl<H: Copy> Buckets2d<H> {
             elements: elements.to_vec(),
         }
     }
-    fn to_idx(width: usize, (x, y): (usize, usize)) -> usize {
-        x + y * width
+    fn to_idx(width: usize, height: usize, (x, y): (usize, usize)) -> usize {
+        if x < width && y < height {
+            x + y * width
+        } else {
+            let x = if x >= width { width - 1 } else { x };
+            let y = if y >= height { height - 1 } else { y };
+            x + y * width
+        }
     }
     pub fn get_bucket_contents(
         &self,
@@ -324,7 +330,7 @@ impl<H: Copy> Buckets2d<H> {
             return None;
         }
 
-        if let Some(mut idx) = self.bucket_heads[Self::to_idx(self.width, bucket)] {
+        if let Some(mut idx) = self.bucket_heads[Self::to_idx(self.width, self.height, bucket)] {
             let mut bucket_contents = Vec::with_capacity(self.next_elements.len());
             bucket_contents.push(self.elements[idx]);
             while let Some(next_idx) = self.next_elements[idx] {
@@ -364,7 +370,7 @@ impl<H: BodyHandle> ForceGenerator<f32, H> for VanDerWaalsForce {
         self.num_particles = particles.len();
         let distance_threshold = self.distance_threshold as f32;
 
-        if self.num_particles < 100 {
+        if self.num_particles < 10 {
             for (_, pos1, r1) in particles.iter() {
                 for (bh, pos2, r2) in particles.iter() {
                     let distance = pos2 - pos1;

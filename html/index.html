@@ -14,7 +14,7 @@
       <div class=tab-bar>
         <label for=setupTab >🏠</label>
         <label for=addTab >±○</label>
-        <label for=heatTab >±🔥</label>
+        <label for=heatTab ><b style="color:blue">❄</b>/🔥</label>
       </div>
 
       <form class='tab setup'>
@@ -23,7 +23,7 @@
         <label># particles: <input type=number name=n min=0 value=30 /></label>
         <label>Radius: <input type=number name=radius min=1 value=10 /></label>
         <label>Density: <input type=number name=density min=1 value=1 /></label>
-        <label>Heat: <input type=number name=heat min=1 value=500 /></label>
+        <label>Heat: <input type=number name=heat min=0 value=1000 /></label>
         <label>Van Der Waals: <input type=number name=vdw max=0 value=-100 /></label>
         <button>Reload</button>
         <label>Timestep: <input type=number name=timestep min=1 max=200 step=1 /></label>
@@ -40,7 +40,7 @@
         <label>Rate: <input type=number name=rate min=1 value=5 /></label>
         <label>Radius: <input type=number name=radius min=1 value=10 /></label>
         <label>Density: <input type=number name=density min=1 value=1 /></label>
-        <label>Heat: <input type=number name=heat min=1 value=500 /></label>
+        <label>Heat: <input type=number name=heat min=1 value=1000 /></label>
         <div class=mode>
           <input type=radio name=modifyParticles id=addParticles value=add checked />
           <label for=addParticles>+</label>
