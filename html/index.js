@@ -185,7 +185,7 @@ let control = {
 
   addHeat: e => {
     let form = $('form.tab.heat');
-    let [factor, radius] = [pfloat(form.factor.value) / 5, pint(form.radius.value)];
+    let [factor, radius] = [pfloat(form.factor.value), pint(form.radius.value)];
 
     control._continuouslyDo(30, (x, y) => control.world.temperature(x, y, radius, factor));
   },
