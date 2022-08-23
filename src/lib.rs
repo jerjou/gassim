@@ -1,5 +1,5 @@
-use nalgebra::{Isometry2, Point2, Vector2};
-use ncollide2d::shape::{Ball, Compound, Cuboid, ShapeHandle};
+use nalgebra::{Isometry2, Point2, Unit, Vector2};
+use ncollide2d::shape::{Ball, Compound, Cuboid, Plane, ShapeHandle};
 use nphysics2d::force_generator::DefaultForceGeneratorSet;
 use nphysics2d::force_generator::ForceGenerator;
 use nphysics2d::joint::DefaultJointConstraintSet;
@@ -36,6 +36,12 @@ extern "C" {
     fn log(s: &str);
 }
 
+#[derive(Clone, Copy)]
+enum ObjType {
+    Circle = 0,
+    Wall,
+}
+
 #[wasm_bindgen]
 pub struct World {
     mech: DefaultMechanicalWorld<f32>,
@@ -44,7 +50,9 @@ pub struct World {
     colliders: DefaultColliderSet<f32>,
     joint_constraints: DefaultJointConstraintSet<f32>,
     force_generators: DefaultForceGeneratorSet<f32>,
-    positions: Vec<(f32, f32, f32)>,
+    positions: Vec<(f32, f32, f32, f32, f32)>,
+    width: f32,
+    height: f32,
     pub num_particles: usize,
     rng: rand::rngs::ThreadRng,
 }
@@ -59,7 +67,7 @@ impl World {
         radius: f32,
         mass: f32,
         heat: f32,
-        van_der_waals: f32,
+        _van_der_waals: f32,
     ) -> Self {
         console_error_panic_hook::set_once();
         let mechanical_world = DefaultMechanicalWorld::new(Vector2::new(0.0, gravity));
@@ -71,29 +79,27 @@ impl World {
         let mut force_generators = DefaultForceGeneratorSet::new();
 
         // Create box boundaries
-        const WALL_WIDTH: f32 = 100.; // Thick wall width to ensure it's impenetrable
         let walls = [
-            // x, y, width, height
-            (0.0f32, -WALL_WIDTH, 1.2 * width, WALL_WIDTH), // bottom
-            (-WALL_WIDTH, 0., WALL_WIDTH, 1.2 * height),    // left
-            (width + WALL_WIDTH, 0., WALL_WIDTH, 1.2 * height), // right
-            (0.0f32, height + WALL_WIDTH, width, WALL_WIDTH), // top
+            // x, y, normal_vector
+            (0.0f32, 0.0f32, Vector2::new(0., 1.)),  // bottom
+            (0., 0., Vector2::new(1., 0.)),          // left
+            (width, 0., Vector2::new(-1., 0.)),      // right
+            (0.0f32, height, Vector2::new(0., -1.)), // top
         ];
-        let ground = Compound::new(
+        let ground = ShapeHandle::new(Compound::new(
             walls
                 .iter()
                 .copied()
-                .map(|(x, y, w, h)| {
+                .map(|(x, y, norm)| {
                     let delta = Isometry2::new(Vector2::new(x, y), 0.);
-                    let shape = ShapeHandle::new(Cuboid::new(Vector2::new(w, h)));
+                    let shape = ShapeHandle::new(Plane::new(Unit::new_normalize(norm)));
                     (delta, shape)
                 })
                 .collect(),
-        );
-        let ground_shape = ShapeHandle::new(ground);
+        ));
         let ground_handle = bodies.insert(Ground::new());
         colliders.insert(
-            ColliderDesc::new(ground_shape)
+            ColliderDesc::new(ground)
                 //.translation(Vector2::y() * height)
                 // restitution, friction: 0.5
                 .material(MaterialHandle::new(BasicMaterial::new(RESTITUTION, 0.0)))
@@ -101,16 +107,16 @@ impl World {
         );
 
         // Add Van Der Waals forces between the particles
-        if van_der_waals < 0. {
-            log!("Adding Van Der Waals force {}", van_der_waals);
-            force_generators.insert(Box::new(VanDerWaalsForce {
-                magnitude: van_der_waals,
-                distance_threshold: 128,
-                world_width: width as usize,
-                world_height: height as usize,
-                num_particles,
-            }));
-        }
+        //if van_der_waals < 0. {
+        //    log!("Adding Van Der Waals force {}", van_der_waals);
+        //    force_generators.insert(Box::new(VanDerWaalsForce {
+        //        magnitude: van_der_waals,
+        //        distance_threshold: 128,
+        //        world_width: width as usize,
+        //        world_height: height as usize,
+        //        num_particles,
+        //    }));
+        //}
 
         // Seed it with particles
         let rng = rand::thread_rng();
@@ -124,6 +130,8 @@ impl World {
             rng,
             num_particles: 0,
             positions: vec![],
+            width: width,
+            height: height,
         };
         let mut rng = rand::thread_rng();
         (0..num_particles).for_each(|_i| {
@@ -140,7 +148,7 @@ impl World {
     }
 
     pub fn add_particles(&mut self, x: f32, y: f32, radius: f32, mass: f32, heat: f32, n: usize) {
-        log!("Adding {} particle(s) at {}, {}", n, x, y);
+        //log!("Adding {} particle(s) at {}, {}", n, x, y);
         (0..n).for_each(|_| {
             let rigid_body = RigidBodyDesc::new()
                 .position(Isometry2::new(Vector2::new(x, y), 0.))
@@ -151,7 +159,7 @@ impl World {
                 ))
                 .mass(mass)
                 .sleep_threshold(None)
-                .user_data(radius)
+                .user_data((ObjType::Circle, radius, radius))
                 .build();
             let handle = self.bodies.insert(rigid_body);
 
@@ -163,8 +171,6 @@ impl World {
                     .build(BodyPartHandle(handle, 0)),
             );
         });
-
-        self.num_particles += n;
     }
 
     pub fn remove_particles(&mut self, x: f32, y: f32, radius: f32) {
@@ -173,14 +179,17 @@ impl World {
         let bodies: Vec<_> = self
             .colliders
             .iter()
-            .map(|(col_h, collider)| {
-                (
-                    col_h,
-                    collider.body(),
-                    self.bodies.get(collider.body()).unwrap(),
-                )
+            .filter_map(|(col_h, collider)| {
+                if collider.shape_handle().is_shape::<Ball<_>>() {
+                    Some((
+                        col_h,
+                        collider.body(),
+                        self.bodies.get(collider.body()).unwrap(),
+                    ))
+                } else {
+                    None
+                }
             })
-            .filter(|(_, _, body)| !body.is_ground())
             .filter(|(_, _, body)| {
                 let pos = body.part(0).unwrap().position().translation.vector;
                 let (dx, dy) = ((pos.x - x).abs(), (pos.y - y).abs());
@@ -189,38 +198,93 @@ impl World {
             .map(|(col_h, bod_h, _)| (col_h, bod_h))
             .collect();
 
-        self.num_particles -= bodies.len();
-
         bodies.iter().for_each(|(col_h, bod_h)| {
             self.bodies.remove(*bod_h);
             self.colliders.remove(*col_h);
         });
     }
 
-    pub fn update_positions(&mut self) -> *const (f32, f32, f32) {
-        self.positions = self
-            .bodies
+    pub fn add_wall(&mut self, mass: f32, horizontal: bool) {
+        log!("Adding {} wall", if horizontal { "horiz" } else { "vert" });
+        if self
+            .colliders
             .iter()
-            .filter_map(|(_, body)| {
-                if !body.is_ground() {
-                    body.downcast_ref::<RigidBody<_>>()
+            .find(|(_, collider)| collider.shape_handle().is_shape::<Cuboid<f32>>())
+            .is_some()
+        {
+            log!("Wall already exists");
+            return;
+        }
+        log!("Wall doesn't exist");
+        let width = self.width;
+        let height = 0.1 * self.height;
+        let rigid_body = RigidBodyDesc::new()
+            .position(Isometry2::new(
+                Vector2::new(self.width / 2., self.height - 1.),
+                0.,
+            ))
+            .gravity_enabled(true)
+            .mass(mass)
+            .sleep_threshold(None)
+            .user_data((ObjType::Wall, width, height))
+            .build();
+        log!("Inserting wall");
+        let handle = self.bodies.insert(rigid_body);
+
+        log!("Inserting collider");
+        self.colliders.insert(
+            ColliderDesc::new(ShapeHandle::new(Cuboid::new(Vector2::new(width, height))))
+                // restitution, friction: 0.5
+                .material(MaterialHandle::new(BasicMaterial::new(RESTITUTION, 0.0)))
+                .margin(height * .1)
+                .build(BodyPartHandle(handle, 0)),
+        );
+
+        log!("Wall added");
+    }
+
+    pub fn remove_wall(&mut self) {
+        log!("Removing wall...");
+        let wall: Vec<_> = self
+            .colliders
+            .iter()
+            .filter_map(|(collider_handle, collider)| {
+                if collider.shape_handle().is_shape::<Cuboid<f32>>() {
+                    Some((collider_handle, collider.body()))
                 } else {
                     None
                 }
             })
+            .collect();
+        wall.iter().for_each(|(wall_handle, wall_body)| {
+            self.bodies.remove(*wall_body);
+            self.colliders.remove(*wall_handle);
+            log!("Removed");
+        });
+    }
+
+    pub fn update_positions(&mut self) -> *const (f32, f32, f32, f32, f32) {
+        self.positions = self
+            .bodies
+            .iter()
+            .filter_map(|(_, body)| body.downcast_ref::<RigidBody<_>>())
+            .filter(|body| body.user_data().is_some())
             .map(|body| {
                 let pos = body.part(0).unwrap().position().translation.vector;
-                (
-                    pos.x,
-                    pos.y,
-                    *body.user_data().unwrap().downcast_ref::<f32>().unwrap(),
-                )
+                let (obj_type, dim_x, dim_y) = *body
+                    .user_data()
+                    .unwrap()
+                    .downcast_ref::<(ObjType, f32, f32)>()
+                    .unwrap();
+                (obj_type as i32 as f32, pos.x, pos.y, dim_x, dim_y)
             })
             .collect();
+        // Expose this so that the caller knows the length of the returned array
+        self.num_particles = self.positions.len();
         self.positions.as_ptr()
     }
 
-    pub fn step(&mut self) -> *const (f32, f32, f32) {
+    pub fn step(&mut self) -> *const (f32, f32, f32, f32, f32) {
         // Run the simulation.
         self.mech.step(
             &mut self.geo,
@@ -236,7 +300,11 @@ impl World {
         let r2 = radius.powi(2);
         self.bodies
             .iter_mut()
-            .filter(|(_, body)| !body.is_ground())
+            .filter(|(_, body)| {
+                body.downcast_ref::<RigidBody<_>>()
+                    .and_then(|rigid_body| rigid_body.user_data())
+                    .is_some()
+            })
             .filter(|(_, body)| {
                 let pos = body.part(0).unwrap().position().translation.vector;
                 let (dx, dy) = ((pos.x - x).abs(), (pos.y - y).abs());
@@ -280,7 +348,11 @@ impl<H: Copy> Buckets2d<H> {
         world_width: usize,
         world_height: usize,
     ) -> Self {
-        let (width, height) = (1 + world_width / bucket_size, 1 + world_height / bucket_size);
+        log!("A whole new world");
+        let (width, height) = (
+            1 + world_width / bucket_size,
+            1 + world_height / bucket_size,
+        );
         let mut bucket_heads = vec![None; width * height];
         let mut next_elements = vec![None; elements.len()];
         for (i, (_, pos, _)) in elements.iter().enumerate() {
@@ -344,6 +416,8 @@ impl<H: Copy> Buckets2d<H> {
     }
 }
 
+// TODO: Does this force not get updated when we add and remove particles? Does it only affect the
+// original particles?
 struct VanDerWaalsForce {
     magnitude: f32,
     distance_threshold: usize,
@@ -356,14 +430,13 @@ impl<H: BodyHandle> ForceGenerator<f32, H> for VanDerWaalsForce {
         // First, put the stupid bodyset into a vector for easier manipulation
         let mut particles = Vec::with_capacity(self.num_particles + 8);
         bodies.foreach(&mut |bh, body: &dyn Body<f32>| {
-            if !body.is_ground() {
-                let radius = *body
-                    .downcast_ref::<RigidBody<f32>>()
-                    .unwrap()
-                    .user_data()
-                    .unwrap()
-                    .downcast_ref::<f32>()
-                    .unwrap();
+            // Just use the x-radius, to simplify things
+            if let Some(&(_obj_type, radius, _)) = body
+                .downcast_ref::<RigidBody<f32>>()
+                .and_then(|rigid_body| rigid_body.user_data())
+                .and_then(|user_data| user_data.downcast_ref::<(ObjType, f32, f32)>())
+            {
+                // TODO: deal with non-circle object types
                 particles.push((bh, body.part(0).unwrap().center_of_mass(), radius))
             }
         });
@@ -381,8 +454,7 @@ impl<H: BodyHandle> ForceGenerator<f32, H> for VanDerWaalsForce {
                     let body = bodies.get_mut(*bh).unwrap();
                     // One of those `norm`s is to reduce `distance` to a unit vector
                     let force = Force::linear(
-                        self.magnitude * r1 * r2 * distance
-                        / ((r1 + r2) * distance.norm().powi(3)),
+                        self.magnitude * r1 * r2 * distance / ((r1 + r2) * distance.norm().powi(3)),
                     );
                     body.apply_force(0, &force, ForceType::Force, false);
                 }
@@ -411,7 +483,7 @@ impl<H: BodyHandle> ForceGenerator<f32, H> for VanDerWaalsForce {
                             // One of those `norm`s is to reduce `distance` to a unit vector
                             let force = Force::linear(
                                 self.magnitude * r1 * r2 * distance
-                                / ((r1 + r2) * distance.norm().powi(3)),
+                                    / ((r1 + r2) * distance.norm().powi(3)),
                             );
                             body.apply_force(0, &force, ForceType::Force, false);
                         }

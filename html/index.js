@@ -31,6 +31,7 @@ let control = {
       wasm: wasm,
     });
 
+    document.body.addEventListener('submit', e => e.preventDefault());
     control.initMouse(canvas);
     control.initKeyboard();
     control.initHeat(canvas);
@@ -59,10 +60,7 @@ let control = {
       form.timestep.value = Math.round(control.world.timestep() * TIMESTEP_FACTOR);
     };
 
-    form.addEventListener('submit', e => {
-      e.preventDefault();
-      resetWorld();
-    });
+    form.addEventListener('submit', resetWorld);
     resetWorld();
 
     // Ability to update some properties on the fly
@@ -103,10 +101,12 @@ let control = {
     h: e => $('#setupTab').checked = true,
     o: e => $('#addTab').checked = true,
     p: e => {
+      e.preventDefault();
       let p = $('#play');
       p.checked = !p.checked;
       p.dispatchEvent(new InputEvent('change'));
     },
+    ' ': e => control.kbdShortcuts.p(e),
   },
   initKeyboard: _ => {
     window.addEventListener('keydown', e => {
@@ -132,6 +132,24 @@ let control = {
   initParticles: canvas => {
     canvas.addEventListener('mousedown', (e) => {
       if ($('#addTab').checked) control.addParticles(e);
+    });
+
+    // Also, the controls for adding walls
+    let form = $('form.tab.add');
+    form.addEventListener('click', e => {
+      let radius = pint(form.radius.value);
+      let elem = e.originalTarget;
+      if (elem.tagName === 'BUTTON') {
+        let [rate, mass, heat] = [
+          pint(form.rate.value),
+          pfloat(form.density.value) * radius * radius * 3.14159,
+          pint(form.heat.value)];
+        if (elem.innerText === 'Add wall') {
+          control.world.add_wall(mass << 8, true);
+        } else if (elem.innerText === 'Remove wall') {
+          control.world.remove_wall();
+        }
+      }
     });
   },
 
@@ -191,7 +209,7 @@ let control = {
   },
 
   renderLoop: (time, positionsPtr) => {
-    const tuple_len = 3;
+    const tuple_len = 5;
     if (!positionsPtr) {
       positionsPtr = control.world.step();
     }
@@ -206,15 +224,25 @@ let control = {
     ctx.clearRect(0, 0, width, height);
     for (let i = 0; i < tuple_len * numPoints; i += tuple_len) {
       ctx.beginPath();
-      ctx.ellipse(
-        // x, y
-        coords[i], height - coords[i + 1],
-        // radiusX, radiusY
-        coords[i + 2], coords[i + 2],
-        // rotation
-        0,
-        // startAngle, endAngle
-        0, 2 * Math.PI);
+      if (coords[i] == 0) { // Circle
+        ctx.ellipse(
+          // x, y
+          coords[i+1], height - coords[i + 2],
+          // radiusX, radiusY
+          coords[i + 3], coords[i + 4],
+          // rotation
+          0,
+          // startAngle, endAngle
+          0, 2 * Math.PI);
+      } else if (coords[i] == 1) { // Wall
+        let center = [coords[i+1], coords[i+2]];
+        let dims = [coords[i+3], coords[i+4]];
+        ctx.rect(
+          center[0] - (dims[0] / 2), height - (center[1] + dims[1] / 2),
+          dims[0], dims[1]);
+      } else {
+        console.log(`Unknown object type: {coords[i]}`);
+      }
       ctx.stroke();
     }
     if (control.playEl.checked) {

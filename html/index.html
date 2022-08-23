@@ -1,5 +1,7 @@
+<!DOCTYPE html>
 <html>
   <head>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
     <link href="index.css" rel="stylesheet">
     <script type="module" src="index.js"></script>
@@ -27,7 +29,7 @@
         <label>Van Der Waals: <input type=number name=vdw max=0 value=-100 /></label>
         <button>Reload</button>
         <label>Timestep: <input type=number name=timestep min=1 max=200 step=1 /></label>
-        <label>Gravity: <input type=number name=gravity max=0 step=.01 value=-0.1 /></label>
+        <label>Gravity: <input type=number name=gravity max=0 step=.01 value=-9.8 /></label>
         <div class="spacer"></div>
         <div class=descr>
           <b>Initial world settings</b><br/>
@@ -46,6 +48,10 @@
           <label for=addParticles>+</label>
           <input type=radio name=modifyParticles id=subtractParticles value=subtract />
           <label for=subtractParticles>−</label>
+        </div>
+        <div class="wall-control">
+          <button>Add wall</button>
+          <button>Remove wall</button>
         </div>
         <div class="spacer"></div>
         <div class=descr>
