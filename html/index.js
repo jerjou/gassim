@@ -138,14 +138,14 @@ let control = {
     let form = $('form.tab.add');
     form.addEventListener('click', e => {
       let radius = pint(form.radius.value);
-      let elem = e.originalTarget;
+      let elem = e.originalTarget || e.srcElement;
       if (elem.tagName === 'BUTTON') {
         let [rate, mass, heat] = [
           pint(form.rate.value),
           pfloat(form.density.value) * radius * radius * 3.14159,
           pint(form.heat.value)];
         if (elem.innerText === 'Add wall') {
-          control.world.add_wall(mass << 8, true);
+          control.world.add_wall(mass << 7, true);
         } else if (elem.innerText === 'Remove wall') {
           control.world.remove_wall();
         }
